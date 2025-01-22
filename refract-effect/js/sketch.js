@@ -1,20 +1,23 @@
 let particles = [];
-let stars = [];
-let spacing = 20;
-let mouseInfluenceRadius = 50;
-let lastMouseX, lastMouseY;
-let glowIntensity = 255;
 let particleSize = 4;
+let spacing = particleSize * 8; // Dynamic spacing based on particle size
+let mouseInfluenceRadius = 100;
+let lastMouseX, lastMouseY;
+let glowIntensity = 150;
 let bloomShader;
 let particleBuffer;
 let bloomBuffer;
-let starBuffer;
+let bgImage;
+let bgOpacity = 100; // Background opacity (0-255)
 let waveTime = 0;
-let waveSpeed = 0.3;
+let waveSpeed = 0.1;
 let waveFrequency = 0.005;
 let waveAmplitude = 10;
 let activeRadius = 100;
-let numStars = 300;
+let mouseHoldTime = 0;
+let explosions = [];
+let colorShiftTime = 0;
+let isColorShifting = false;
 
 // Bloom shader code
 const bloomVertShader = `
@@ -70,34 +73,58 @@ void main() {
     gl_FragColor = original + bloom;
 }`;
 
-class Star {
-    constructor() {
-        this.x = random(-width/2, width/2);
-        this.y = random(-height/2, height/2);
-        this.size = random(1, 3);
-        this.twinkleSpeed = random(0.02, 0.05);
-        this.offset = random(TWO_PI);
-        this.brightness = random(30, 100);
+class Explosion {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 0;
+        this.maxRadius = 250;
+        this.speed = 15;
+        this.alpha = 255;
     }
 
     update() {
-        this.brightness = map(sin(waveTime * this.twinkleSpeed + this.offset), -1, 1, 30, 100);
+        this.radius += this.speed;
+        this.alpha = map(this.radius, 0, this.maxRadius, 255, 0);
+        return this.radius < this.maxRadius;
     }
 
     draw(buffer) {
         buffer.push();
         buffer.blendMode(ADD);
-        buffer.noStroke();
+        buffer.noFill();
+        buffer.strokeWeight(2);
         
-        // Main star
-        buffer.fill(220, 30, this.brightness, 200);
-        buffer.circle(this.x, this.y, this.size);
-        
-        // Glow effect
-        buffer.fill(220, 30, this.brightness, 50);
-        buffer.circle(this.x, this.y, this.size * 2);
-        
+        // Draw multiple rings with different colors
+        for (let i = 0; i < 3; i++) {
+            let hue = (frameCount * 2 + i * 30) % 360;
+            buffer.stroke(hue, 100, 100, this.alpha * 0.5);
+            buffer.circle(this.x - width/2, this.y - height/2, this.radius - i * 20);
+        }
         buffer.pop();
+    }
+
+    affectParticle(particle) {
+        let dx = particle.screenX - this.x;
+        let dy = particle.screenY - this.y;
+        let distance = sqrt(dx * dx + dy * dy);
+        let ringDistance = abs(distance - this.radius);
+        
+        if (ringDistance < 50) {
+            let influence = map(ringDistance, 0, 50, 1, 0, true);
+            influence = influence * influence;
+            
+            // Add force away from explosion center
+            let angle = atan2(dy, dx);
+            particle.vx += cos(angle) * influence * 5;
+            particle.vy += sin(angle) * influence * 5;
+            
+            // Increase brightness
+            particle.brightness = min(particle.brightness + influence * 200, glowIntensity);
+            
+            // Shift color
+            particle.hue = (particle.hue + influence * 10) % 360;
+        }
     }
 }
 
@@ -114,7 +141,8 @@ class Particle {
         this.damping = 0.97;
         this.brightness = 0;
         this.waveBrightness = 0;
-        this.hue = random(160, 220);
+        this.baseHue = random(160, 220);
+        this.hue = this.baseHue;
         this.size = random(particleSize * 0.9, particleSize * 1.1);
         this.needsUpdate = true;
         this.waveOffset = 0;
@@ -185,6 +213,19 @@ class Particle {
             this.screenX = this.x + width/2;
             this.screenY = height/2 - this.y;
         }
+
+        // Color shift effect
+        if (isColorShifting) {
+            let targetHue = (frameCount * 2) % 360;
+            this.hue = lerp(this.hue, targetHue, 0.1);
+        } else {
+            this.hue = lerp(this.hue, this.baseHue, 0.1);
+        }
+
+        // Apply explosion effects
+        explosions.forEach(explosion => {
+            explosion.affectParticle(this);
+        });
     }
 
     draw(buffer) {
@@ -223,6 +264,22 @@ class Particle {
 function preload() {
     // Create shader
     bloomShader = createShader(bloomVertShader, bloomFragShader);
+    // Load background image
+    bgImage = loadImage('https://images.unsplash.com/photo-1476968052548-9b8e04d29c9a?q=80&w=2670&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D');
+}
+
+function updateParticleGrid() {
+    particles = [];
+    // Calculate spacing based on particle size and desired density
+    spacing = particleSize * 8; // Adjust multiplier to control density
+    
+    // Create particles with new spacing
+    for (let x = 0; x < width; x += spacing) {
+        for (let y = 0; y < height; y += spacing) {
+            particles.push(new Particle(x, y));
+        }
+    }
+    console.log(`Created ${particles.length} particles with spacing ${spacing}px`);
 }
 
 function setup() {
@@ -232,44 +289,28 @@ function setup() {
     // Create offscreen buffers
     particleBuffer = createGraphics(width, height, WEBGL);
     bloomBuffer = createGraphics(width, height, WEBGL);
-    starBuffer = createGraphics(width, height, WEBGL);
     
     particleBuffer.colorMode(HSB, 360, 100, 100, glowIntensity);
-    starBuffer.colorMode(HSB, 360, 100, 100, glowIntensity);
     
-    // Create stars
-    for (let i = 0; i < numStars; i++) {
-        stars.push(new Star());
-    }
-    
-    // Create particles
-    for (let x = 0; x < width; x += spacing) {
-        for (let y = 0; y < height; y += spacing) {
-            particles.push(new Particle(x, y));
-        }
-    }
+    // Initialize particle grid
+    updateParticleGrid();
 }
 
 function draw() {
-    // Start with dark background
-    background(220, 70, 5); // Dark blue background
+    // Draw background image with opacity
+    push();
+    background(0);
+    imageMode(CENTER);
+    let scale = max(width / bgImage.width, height / bgImage.height);
+    tint(255, bgOpacity); // Set opacity for background image
+    image(bgImage, 0, 0, bgImage.width * scale, bgImage.height * scale);
+    pop();
     
     // Update wave time
     waveTime += waveSpeed;
     
-    // Clear buffers
+    // Clear particle buffer
     particleBuffer.clear();
-    bloomBuffer.clear();
-    starBuffer.clear();
-    
-    // Draw stars to star buffer
-    starBuffer.background(220, 70, 5); // Match main background
-    starBuffer.push();
-    stars.forEach(star => {
-        star.update();
-        star.draw(starBuffer);
-    });
-    starBuffer.pop();
     
     // Draw particles to particle buffer
     particleBuffer.push();
@@ -279,13 +320,7 @@ function draw() {
     });
     particleBuffer.pop();
     
-    // First draw the star background
-    push();
-    blendMode(BLEND);
-    image(starBuffer, -width/2, -height/2, width, height);
-    pop();
-    
-    // Then apply bloom shader to particles and draw them on top
+    // Apply bloom shader to particles and draw them on top
     push();
     blendMode(ADD);
     bloomShader.setUniform('tex0', particleBuffer);
@@ -295,6 +330,10 @@ function draw() {
     rect(-width/2, -height/2, width, height);
     pop();
     
+    // Update and draw explosions
+    explosions = explosions.filter(explosion => explosion.update());
+    explosions.forEach(explosion => explosion.draw(particleBuffer));
+    
     lastMouseX = mouseX;
     lastMouseY = mouseY;
 }
@@ -303,22 +342,22 @@ function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
     particleBuffer = createGraphics(width, height, WEBGL);
     bloomBuffer = createGraphics(width, height, WEBGL);
-    starBuffer = createGraphics(width, height, WEBGL);
     
     particleBuffer.colorMode(HSB, 360, 100, 100, glowIntensity);
-    starBuffer.colorMode(HSB, 360, 100, 100, glowIntensity);
     
-    // Recreate stars for new dimensions
-    stars = [];
-    for (let i = 0; i < numStars; i++) {
-        stars.push(new Star());
-    }
-    
-    // Recreate particles
-    particles = [];
-    for (let x = 0; x < width; x += spacing) {
-        for (let y = 0; y < height; y += spacing) {
-            particles.push(new Particle(x, y));
-        }
+    // Update particle grid on resize
+    updateParticleGrid();
+}
+
+function mousePressed() {
+    mouseHoldTime = millis();
+}
+
+function mouseReleased() {
+    let holdDuration = millis() - mouseHoldTime;
+    if (holdDuration > 500) { // Hold for 0.5 seconds
+        explosions.push(new Explosion(mouseX, mouseY));
+        isColorShifting = true;
+        setTimeout(() => isColorShifting = false, 3000); // Stop color shift after 3 seconds
     }
 }
