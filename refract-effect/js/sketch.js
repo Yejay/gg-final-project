@@ -18,6 +18,11 @@ let mouseHoldTime = 0;
 let explosions = [];
 let colorShiftTime = 0;
 let isColorShifting = false;
+let mic, fft;
+let audioEnabled = false;
+let sensitivity = 0.5;
+let frequencyBands = 64;
+let audioSpectrum = [];
 
 // Bloom shader code
 const bloomVertShader = `
@@ -226,6 +231,24 @@ class Particle {
         explosions.forEach(explosion => {
             explosion.affectParticle(this);
         });
+
+        // Add audio reactivity to particle behavior with better constraints
+        if (audioEnabled) {
+            let audioLevel = constrain(audioSpectrum / 100, 0, 1);
+            
+            // Modify particle properties based on audio with limited scaling
+            let baseSize = random(particleSize * 0.9, particleSize * 1.1);
+            this.size = map(audioLevel, 0, 1, baseSize, baseSize * 2);
+            
+            // Adjust brightness with a more controlled range
+            let audioBrightness = map(audioLevel, 0, 1, 0, glowIntensity * 0.3);
+            this.brightness = max(this.brightness, audioBrightness);
+            
+            // Add gentler movement based on audio
+            let angle = noise(this.x * 0.01, this.y * 0.01, frameCount * 0.02) * TWO_PI;
+            this.vx += cos(angle) * audioLevel * 0.2;
+            this.vy += sin(angle) * audioLevel * 0.2;
+        }
     }
 
     draw(buffer) {
@@ -282,6 +305,47 @@ function updateParticleGrid() {
     console.log(`Created ${particles.length} particles with spacing ${spacing}px`);
 }
 
+function setupAudio() {
+    mic = new p5.AudioIn();
+    fft = new p5.FFT(0.8, frequencyBands);
+    fft.setInput(mic);
+}
+
+function toggleAudio() {
+    if (!audioEnabled) {
+        userStartAudio().then(() => {
+            mic.start();
+            audioEnabled = true;
+            document.getElementById('toggleAudio').textContent = 'Disable Audio';
+            document.getElementById('toggleAudio').style.background = '#f44336';
+        });
+    } else {
+        mic.stop();
+        audioEnabled = false;
+        document.getElementById('toggleAudio').textContent = 'Enable Audio';
+        document.getElementById('toggleAudio').style.background = '#4CAF50';
+    }
+}
+
+function updateAudioData() {
+    if (!audioEnabled) return;
+    
+    fft.analyze();
+    
+    // Get different frequency bands with better scaling
+    let bass = constrain(fft.getEnergy("bass") * sensitivity, 0, 100);
+    let mid = constrain(fft.getEnergy("mid") * sensitivity, 0, 100);
+    let treble = constrain(fft.getEnergy("treble") * sensitivity, 0, 100);
+    
+    // Calculate overall spectrum with constraints
+    audioSpectrum = constrain((bass + mid + treble) / 3, 0, 100);
+    
+    // Update global parameters with more controlled ranges
+    waveSpeed = map(bass, 0, 100, 0.05, 0.15);
+    waveAmplitude = map(mid, 0, 100, 3, 8);
+    glowIntensity = map(treble, 0, 100, 150, 180);
+}
+
 function setup() {
     createCanvas(windowWidth, windowHeight, WEBGL);
     colorMode(HSB, 360, 100, 100, glowIntensity);
@@ -294,9 +358,21 @@ function setup() {
     
     // Initialize particle grid
     updateParticleGrid();
+    
+    // Setup audio
+    setupAudio();
+    
+    // Add event listeners
+    document.getElementById('toggleAudio').addEventListener('click', toggleAudio);
+    document.getElementById('sensitivity').addEventListener('input', (e) => {
+        sensitivity = e.target.value / 100;
+    });
 }
 
 function draw() {
+    // Update audio data
+    updateAudioData();
+    
     // Draw background image with opacity
     push();
     background(0);
