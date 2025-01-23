@@ -296,9 +296,12 @@ function updateParticleGrid() {
     // Calculate spacing based on particle size and desired density
     spacing = particleSize * 8; // Adjust multiplier to control density
     
-    // Create particles with new spacing
-    for (let x = 0; x < width; x += spacing) {
-        for (let y = 0; y < height; y += spacing) {
+    // Add padding to ensure coverage during movement
+    let padding = spacing * 4; // 4 additional particles worth of padding on each side
+    
+    // Create particles with new spacing, including padding area
+    for (let x = -padding; x < width + padding; x += spacing) {
+        for (let y = -padding; y < height + padding; y += spacing) {
             particles.push(new Particle(x, y));
         }
     }
