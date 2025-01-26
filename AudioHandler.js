@@ -31,15 +31,12 @@ function updateAudioData() {
     
     fft.analyze();
     
-    // Get different frequency bands with better scaling
     let bass = constrain(fft.getEnergy("bass") * sensitivity, 0, 100);
     let mid = constrain(fft.getEnergy("mid") * sensitivity, 0, 100);
     let treble = constrain(fft.getEnergy("treble") * sensitivity, 0, 100);
     
-    // Calculate overall spectrum with constraints
     audioSpectrum = constrain((bass + mid + treble) / 3, 0, 100);
     
-    // Update global parameters with more controlled ranges
     waveSpeed = map(bass, 0, 100, 0.05, 0.15);
     waveAmplitude = map(mid, 0, 100, 3, 8);
     glowIntensity = map(treble, 0, 100, 150, 180);
