@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refract Effect</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
+    <script src="Particle.js"></script>
+    <script src="Explosion.js"></script>
+    <script src="BloomShader.js"></script>
+    <script src="AudioHandler.js"></script>
+    <script src="sketch.js"></script>
+</head>
+<body>
+    <main>
+    </main>
+    <div id="audio-controls">
+        <button id="toggleAudio">Enable Audio</button>
+        
+        <!-- Audio Sensitivity -->
+        <div class="control-group">
+            <label for="sensitivity">Audio Sensitivity</label>
+            <input type="range" id="sensitivity" min="0" max="100" value="50">
+        </div>
+
+        <!-- Wave Speed -->
+        <div class="control-group">
+            <label for="waveSpeed">Wave Speed</label>
+            <input type="range" id="waveSpeed" min="0" max="1" step="0.01" value="0.1">
+        </div>
+
+        <!-- Wave Frequency -->
+        <div class="control-group">
+            <label for="waveFrequency">Wave Frequency</label>
+            <input type="range" id="waveFrequency" min="0" max="0.01" step="0.0001" value="0.005">
+        </div>
+
+        <!-- Wave Amplitude -->
+        <div class="control-group">
+            <label for="waveAmplitude">Wave Amplitude</label>
+            <input type="range" id="waveAmplitude" min="1" max="10" step="0.1" value="5">
+        </div>
+
+        <!-- Particle Size -->
+        <div class="control-group">
+            <label for="particleSize">Particle Size</label>
+            <input type="range" id="particleSize" min="1" max="10" step="0.1" value="4">
+        </div>
+
+        <!-- Bloom Intensity -->
+        <div class="control-group">
+            <label for="bloomIntensity">Bloom Intensity</label>
+            <input type="range" id="bloomIntensity" min="0.5" max="3" step="0.1" value="1.5">
+        </div>
+    </div>
+</body>
+</html>
