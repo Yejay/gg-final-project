@@ -18,6 +18,8 @@ let mouseHoldTime = 0;
 let explosions = [];
 let colorShiftTime = 0;
 let isColorShifting = false;
+let music;
+let isMusicPlaying = false;
 
 function preload() {
 	// Create shader
@@ -26,6 +28,13 @@ function preload() {
 	bgImage = loadImage(
 		'https://images.unsplash.com/photo-1476968052548-9b8e04d29c9a?q=80&w=2670&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
 	);
+    /**
+     * Bombastic by Zenji
+     * Free Music Archive
+     * https://freemusicarchive.org/music/Zenji/
+     * Licensed under Attribution-NonCommercial-NoDerivatives 4.0 International License
+     */
+    music = loadSound('https://cdn.jsdelivr.net/gh/Yejay/gg-final-project@main/assets/Zenji - Bombastic.mp3');
 }
 
 function updateParticleGrid() {
@@ -66,7 +75,6 @@ function setup() {
 		sensitivity = e.target.value / 100;
 	});
 
-	// Add event listeners for new UI controls
 	document.getElementById('waveSpeed').addEventListener('input', (e) => {
 		waveSpeed = parseFloat(e.target.value);
 	});
@@ -87,6 +95,8 @@ function setup() {
 	document.getElementById('bloomIntensity').addEventListener('input', (e) => {
 		bloomShader.setUniform('intensity', parseFloat(e.target.value));
 	});
+
+    document.getElementById('toggleMusic').addEventListener('click', toggleMusic);
 }
 
 function draw() {
@@ -157,4 +167,47 @@ function mouseReleased() {
 		isColorShifting = true;
 		setTimeout(() => (isColorShifting = false), 3000); // Stop color shift after 3 seconds
 	}
+}
+
+function toggleMusic() {
+    if (!isMusicPlaying) {
+        music.loop(); // Start playing the music in a loop
+        isMusicPlaying = true;
+        document.getElementById('toggleMusic').textContent = 'Stop Music';
+    } else {
+        music.stop(); // Stop the music
+        isMusicPlaying = false;
+        document.getElementById('toggleMusic').textContent = 'Play Music';
+    }
+}
+
+function setupAudio() {
+    mic = new p5.AudioIn();
+    fft = new p5.FFT(0.8, frequencyBands);
+    
+    // Use music as the input for FFT if music is playing
+    if (isMusicPlaying) {
+        fft.setInput(music);
+    } else {
+        fft.setInput(mic);
+    }
+}
+
+function updateAudioData() {
+    if (!audioEnabled) return;
+    
+    fft.analyze();
+    
+    // Get different frequency bands with better scaling
+    let bass = constrain(fft.getEnergy("bass") * sensitivity, 0, 100);
+    let mid = constrain(fft.getEnergy("mid") * sensitivity, 0, 100);
+    let treble = constrain(fft.getEnergy("treble") * sensitivity, 0, 100);
+    
+    // Calculate overall spectrum with constraints
+    audioSpectrum = constrain((bass + mid + treble) / 3, 0, 100);
+    
+    // Update global parameters with more controlled ranges
+    waveSpeed = map(bass, 0, 100, 0.05, 0.15);
+    waveAmplitude = map(mid, 0, 100, 3, 8);
+    glowIntensity = map(treble, 0, 100, 150, 180);
 }
